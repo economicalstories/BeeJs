@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Bee Flight Simulator</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #87ceeb;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: #2b2b2b;
+    }
+    canvas { display: block; }
+    #hud {
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      background: rgba(255, 255, 255, 0.75);
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-size: 14px;
+      line-height: 1.4;
+      pointer-events: none;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+    #hud b { color: #c08800; }
+    #score {
+      position: fixed;
+      top: 12px;
+      right: 12px;
+      background: rgba(255, 255, 255, 0.75);
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-size: 18px;
+      font-weight: bold;
+      color: #c08800;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+    #start {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.55);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      text-align: center;
+      z-index: 10;
+      cursor: pointer;
+    }
+    #start .panel {
+      background: #fffbea;
+      color: #2b2b2b;
+      padding: 26px 34px;
+      border-radius: 18px;
+      max-width: 420px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+    }
+    #start h1 { margin: 0 0 10px; color: #c08800; }
+    #start p  { margin: 6px 0; }
+    #start .go { margin-top: 14px; font-weight: bold; color: #c08800; }
+  </style>
+</head>
+<body>
+  <div id="hud">
+    <div><b>W / S</b> — thrust / brake</div>
+    <div><b>A / D</b> — yaw left / right</div>
+    <div><b>&uarr; / &darr;</b> — pitch up / down</div>
+    <div><b>Space / Shift</b> — climb / dive</div>
+    <div><b>R</b> — reset position</div>
+  </div>
+  <div id="score">Pollen: 0</div>
+  <div id="start">
+    <div class="panel">
+      <h1>🐝 Bee Flight Simulator</h1>
+      <p>Fly the little crocheted bee around the meadow.</p>
+      <p>Buzz close to flowers to collect pollen.</p>
+      <p class="go">Click anywhere to begin</p>
+    </div>
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+    }
+  }
+  </script>
+  <script type="module">
+    import * as THREE from 'three';
+
+    // ---------- Scene, camera, renderer ----------
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x9ad6f0);
+    scene.fog = new THREE.Fog(0x9ad6f0, 80, 360);
+
+    const camera = new THREE.PerspectiveCamera(
+      60, window.innerWidth / window.innerHeight, 0.1, 1000
+    );
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    document.body.appendChild(renderer.domElement);
+
+    // ---------- Lighting ----------
+    const sun = new THREE.DirectionalLight(0xffffff, 1.1);
+    sun.position.set(40, 80, 30);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(1024, 1024);
+    sun.shadow.camera.left = -60;
+    sun.shadow.camera.right = 60;
+    sun.shadow.camera.top = 60;
+    sun.shadow.camera.bottom = -60;
+    sun.shadow.camera.near = 1;
+    sun.shadow.camera.far = 200;
+    scene.add(sun);
+    scene.add(new THREE.HemisphereLight(0xbfe4ff, 0x4c7a3b, 0.6));
+
+    // ---------- Ground ----------
+    const grassMat = new THREE.MeshStandardMaterial({
+      color: 0x6fb84a, roughness: 1, metalness: 0
+    });
+    const ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(1000, 1000),
+      grassMat
+    );
+    ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
+    scene.add(ground);
+
+    // ---------- Fluffy clouds ----------
+    function makeCloud() {
+      const cloud = new THREE.Group();
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0xffffff, roughness: 1, flatShading: true
+      });
+      const puffs = 4 + Math.floor(Math.random() * 3);
+      for (let i = 0; i < puffs; i++) {
+        const r = 2 + Math.random() * 2.5;
+        const puff = new THREE.Mesh(new THREE.SphereGeometry(r, 8, 6), mat);
+        puff.position.set(
+          (Math.random() - 0.5) * 6,
+          (Math.random() - 0.5) * 1.5,
+          (Math.random() - 0.5) * 6
+        );
+        cloud.add(puff);
+      }
+      return cloud;
+    }
+    for (let i = 0; i < 18; i++) {
+      const c = makeCloud();
+      c.position.set(
+        (Math.random() - 0.5) * 500,
+        40 + Math.random() * 30,
+        (Math.random() - 0.5) * 500
+      );
+      scene.add(c);
+    }
+
+    // ---------- Flowers ----------
+    const flowerColors = [0xff6ea3, 0xffffff, 0xf3c64b, 0xc79dff, 0xff8f3d];
+    const flowers = [];
+
+    function makeFlower() {
+      const group = new THREE.Group();
+      const stem = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.08, 0.1, 2.2, 6),
+        new THREE.MeshStandardMaterial({ color: 0x3f8b2b, roughness: 1 })
+      );
+      stem.position.y = 1.1;
+      stem.castShadow = true;
+      group.add(stem);
+
+      const center = new THREE.Mesh(
+        new THREE.SphereGeometry(0.3, 12, 10),
+        new THREE.MeshStandardMaterial({ color: 0xe8a93a, roughness: 0.9 })
+      );
+      center.position.y = 2.2;
+      center.castShadow = true;
+      group.add(center);
+
+      const petalColor = flowerColors[Math.floor(Math.random() * flowerColors.length)];
+      const petalMat = new THREE.MeshStandardMaterial({
+        color: petalColor, roughness: 0.85, side: THREE.DoubleSide
+      });
+      const petalGeom = new THREE.SphereGeometry(0.35, 10, 8);
+      petalGeom.scale(1, 0.25, 1.6);
+      const petalCount = 6;
+      for (let i = 0; i < petalCount; i++) {
+        const p = new THREE.Mesh(petalGeom, petalMat);
+        const a = (i / petalCount) * Math.PI * 2;
+        p.position.set(Math.cos(a) * 0.55, 2.2, Math.sin(a) * 0.55);
+        p.lookAt(0, 2.2, 0);
+        p.castShadow = true;
+        group.add(p);
+      }
+      return group;
+    }
+
+    for (let i = 0; i < 160; i++) {
+      const f = makeFlower();
+      const r = 15 + Math.random() * 240;
+      const a = Math.random() * Math.PI * 2;
+      f.position.set(Math.cos(a) * r, 0, Math.sin(a) * r);
+      f.rotation.y = Math.random() * Math.PI * 2;
+      scene.add(f);
+      flowers.push(f);
+    }
+
+    // ---------- The cute bee ----------
+    function makeStripeTexture() {
+      const c = document.createElement('canvas');
+      c.width = 64; c.height = 256;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#f5c518';
+      ctx.fillRect(0, 0, 64, 256);
+      ctx.fillStyle = '#141414';
+      ctx.fillRect(0, 40,  64, 28);
+      ctx.fillRect(0, 112, 64, 28);
+      ctx.fillRect(0, 186, 64, 28);
+      const tex = new THREE.CanvasTexture(c);
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.anisotropy = 4;
+      return tex;
+    }
+
+    function makeBee() {
+      // Outer group: flight orientation / position. Inner group: visual tilt (banking).
+      const root = new THREE.Group();
+      const model = new THREE.Group();
+      root.add(model);
+
+      // Plump body — slightly egg shaped, nose forward along +Z
+      const bodyGeom = new THREE.SphereGeometry(1, 32, 24);
+      bodyGeom.scale(0.95, 0.95, 1.15);
+      const bodyMat = new THREE.MeshStandardMaterial({
+        map: makeStripeTexture(),
+        roughness: 0.95,
+        metalness: 0,
+      });
+      const body = new THREE.Mesh(bodyGeom, bodyMat);
+      // Rotate so stripes form rings perpendicular to the forward (+Z) axis
+      body.rotation.x = Math.PI / 2;
+      body.castShadow = true;
+      body.receiveShadow = true;
+      model.add(body);
+
+      // Soft yellow fuzz layer for a slightly crocheted glow
+      const fuzz = new THREE.Mesh(
+        new THREE.SphereGeometry(1.03, 24, 18),
+        new THREE.MeshStandardMaterial({
+          color: 0xffe98a,
+          transparent: true,
+          opacity: 0.12,
+          roughness: 1,
+        })
+      );
+      fuzz.scale.set(0.95, 0.95, 1.15);
+      fuzz.rotation.x = Math.PI / 2;
+      model.add(fuzz);
+
+      // Shiny black bead eyes on the front of the body
+      const eyeMat = new THREE.MeshStandardMaterial({
+        color: 0x050505, roughness: 0.15, metalness: 0.4
+      });
+      const eyeGeom = new THREE.SphereGeometry(0.11, 14, 12);
+      const eyeL = new THREE.Mesh(eyeGeom, eyeMat);
+      eyeL.position.set(-0.32, -0.1, 1.02);
+      model.add(eyeL);
+      const eyeR = new THREE.Mesh(eyeGeom, eyeMat);
+      eyeR.position.set(0.32, -0.1, 1.02);
+      model.add(eyeR);
+
+      // Two rounded white crocheted wings on top, leaning outward
+      const wingMat = new THREE.MeshStandardMaterial({
+        color: 0xf8f8f8,
+        roughness: 0.9,
+        transparent: true,
+        opacity: 0.92,
+        side: THREE.DoubleSide,
+      });
+      function makeWing() {
+        const g = new THREE.SphereGeometry(0.55, 18, 14);
+        g.scale(0.45, 0.12, 0.85);
+        const m = new THREE.Mesh(g, wingMat);
+        m.castShadow = true;
+        return m;
+      }
+      const wingPivotL = new THREE.Group();
+      const wingL = makeWing();
+      wingL.position.set(-0.35, 0.25, -0.1);
+      wingPivotL.add(wingL);
+      wingPivotL.position.set(0, 0.85, 0.05);
+      model.add(wingPivotL);
+
+      const wingPivotR = new THREE.Group();
+      const wingR = makeWing();
+      wingR.position.set(0.35, 0.25, -0.1);
+      wingPivotR.add(wingR);
+      wingPivotR.position.set(0, 0.85, 0.05);
+      model.add(wingPivotR);
+
+      root.userData = { model, wingPivotL, wingPivotR };
+      return root;
+    }
+
+    const bee = makeBee();
+    bee.position.set(0, 8, 0);
+    scene.add(bee);
+
+    // ---------- Flight state ----------
+    const flight = {
+      speed: 0,
+      maxSpeed: 28,
+      accel: 18,
+      drag: 0.6,
+      roll: 0,
+    };
+
+    const keys = Object.create(null);
+    window.addEventListener('keydown', e => {
+      keys[e.code] = true;
+      if (e.code === 'KeyR') resetBee();
+    });
+    window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+    function resetBee() {
+      bee.position.set(0, 8, 0);
+      bee.quaternion.identity();
+      flight.speed = 0;
+    }
+
+    // ---------- Start overlay ----------
+    const startEl = document.getElementById('start');
+    startEl.addEventListener('click', () => {
+      startEl.style.display = 'none';
+    });
+
+    // ---------- Score / pollen ----------
+    let pollen = 0;
+    const scoreEl = document.getElementById('score');
+
+    // ---------- Camera rig ----------
+    const camOffset = new THREE.Vector3(0, 2.2, -6.5);
+    const camLookOffset = new THREE.Vector3(0, 0.8, 4);
+    const camPos = camOffset.clone().add(bee.position);
+    const camTarget = camLookOffset.clone().add(bee.position);
+    camera.position.copy(camPos);
+    camera.lookAt(camTarget);
+
+    // ---------- Animation loop ----------
+    const clock = new THREE.Clock();
+    const forward = new THREE.Vector3();
+    const tmpQ = new THREE.Quaternion();
+    const X_AXIS = new THREE.Vector3(1, 0, 0);
+    const Y_AXIS = new THREE.Vector3(0, 1, 0);
+
+    function update(dt) {
+      // Input → rotation rates
+      const yawRate   = 1.6;
+      const pitchRate = 1.4;
+      let yawInput = 0, pitchInput = 0;
+      if (keys.KeyA) yawInput += 1;
+      if (keys.KeyD) yawInput -= 1;
+      if (keys.ArrowUp)   pitchInput -= 1;
+      if (keys.ArrowDown) pitchInput += 1;
+
+      // Apply yaw (around local Y) and pitch (around local X)
+      tmpQ.setFromAxisAngle(Y_AXIS, yawInput * yawRate * dt);
+      bee.quaternion.multiply(tmpQ);
+      tmpQ.setFromAxisAngle(X_AXIS, pitchInput * pitchRate * dt);
+      bee.quaternion.multiply(tmpQ);
+
+      // Visual roll on turning — applied to the inner model group only
+      const targetRoll = -yawInput * 0.45;
+      flight.roll += (targetRoll - flight.roll) * Math.min(1, dt * 5);
+      bee.userData.model.rotation.z = flight.roll;
+
+      // Thrust
+      let thrust = 0;
+      if (keys.KeyW) thrust += 1;
+      if (keys.KeyS) thrust -= 0.6;
+      flight.speed += thrust * flight.accel * dt;
+      flight.speed -= flight.speed * flight.drag * dt;
+      flight.speed = Math.max(-8, Math.min(flight.maxSpeed, flight.speed));
+
+      // Forward along bee's local +Z
+      forward.set(0, 0, 1).applyQuaternion(bee.quaternion);
+      bee.position.addScaledVector(forward, flight.speed * dt);
+
+      // Vertical assist
+      if (keys.Space)      bee.position.y += 12 * dt;
+      if (keys.ShiftLeft || keys.ShiftRight) bee.position.y -= 12 * dt;
+
+      // Idle bob
+      const t = clock.elapsedTime;
+      bee.position.y += Math.sin(t * 3.2) * 0.006;
+
+      // Keep above ground and under ceiling
+      if (bee.position.y < 1.2) bee.position.y = 1.2;
+      if (bee.position.y > 70)  bee.position.y = 70;
+
+      // Wing flap — faster with speed
+      const flapSpeed = 26 + Math.abs(flight.speed) * 2.2;
+      const flap = Math.sin(t * flapSpeed) * 0.9;
+      bee.userData.wingPivotL.rotation.z = -0.25 + flap;
+      bee.userData.wingPivotR.rotation.z =  0.25 - flap;
+      bee.userData.wingPivotL.rotation.x = 0.15;
+      bee.userData.wingPivotR.rotation.x = 0.15;
+
+      // Camera follow — smooth
+      const desiredPos = camOffset.clone().applyQuaternion(bee.quaternion).add(bee.position);
+      camPos.lerp(desiredPos, Math.min(1, dt * 5));
+      camera.position.copy(camPos);
+
+      const desiredTarget = camLookOffset.clone().applyQuaternion(bee.quaternion).add(bee.position);
+      camTarget.lerp(desiredTarget, Math.min(1, dt * 6));
+      camera.lookAt(camTarget);
+
+      // Flower pollen collection
+      for (let i = flowers.length - 1; i >= 0; i--) {
+        const f = flowers[i];
+        const dx = f.position.x - bee.position.x;
+        const dz = f.position.z - bee.position.z;
+        const dy = (f.position.y + 2.2) - bee.position.y;
+        const d2 = dx*dx + dy*dy + dz*dz;
+        if (d2 < 2.2 * 2.2) {
+          pollen++;
+          scoreEl.textContent = 'Pollen: ' + pollen;
+          // little "pop": shrink + remove
+          scene.remove(f);
+          flowers.splice(i, 1);
+          // respawn a new one elsewhere so the meadow stays lively
+          const nf = makeFlower();
+          const r = 40 + Math.random() * 220;
+          const a = Math.random() * Math.PI * 2;
+          nf.position.set(Math.cos(a) * r, 0, Math.sin(a) * r);
+          nf.rotation.y = Math.random() * Math.PI * 2;
+          scene.add(nf);
+          flowers.push(nf);
+        }
+      }
+    }
+
+    function animate() {
+      const dt = Math.min(0.05, clock.getDelta());
+      update(dt);
+      renderer.render(scene, camera);
+      requestAnimationFrame(animate);
+    }
+    animate();
+
+    // ---------- Resize ----------
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>
